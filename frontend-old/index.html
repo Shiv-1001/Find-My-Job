@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Find My Job – Local Job Finder</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Noto+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- =================== AUTH SCREEN =================== -->
+<div id="auth-screen">
+  <div class="auth-container">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🏗️</div>
+      <div class="auth-logo-text">Find My <span>Job</span></div>
+      <p>Find daily work near you – fast &amp; free</p>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+      </div>
+      <div id="auth-error" class="auth-error"></div>
+      <div id="auth-success" class="auth-success"></div>
+
+      <!-- LOGIN FORM -->
+      <div id="login-form">
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" id="login-email" placeholder="your@email.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="Enter password" autocomplete="current-password"/>
+        </div>
+        <button class="btn-auth" onclick="handleLogin()" id="btn-login">Login to Find My Job</button>
+        <div class="auth-divider">— or use demo accounts —</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn-outline" style="width:100%;padding:10px;font-size:0.8rem;" onclick="demoLogin('worker')">👷 Demo Worker</button>
+          <button class="btn-outline" style="width:100%;padding:10px;font-size:0.8rem;" onclick="demoLogin('employer')">🏢 Demo Employer</button>
+        </div>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div id="register-form" style="display:none;">
+        <div style="margin-bottom:16px;">
+          <div class="apply-form-section-title" style="margin-bottom:10px;">👤 I want to…</div>
+          <div class="role-select">
+            <div class="role-option selected" id="role-worker" onclick="selectRole('worker')">
+              <div class="role-icon">👷</div>
+              <div class="role-label">Find Work</div>
+              <div class="role-sub">Job seeker / Worker</div>
+            </div>
+            <div class="role-option" id="role-employer" onclick="selectRole('employer')">
+              <div class="role-icon">🏢</div>
+              <div class="role-label">Hire Workers</div>
+              <div class="role-sub">Employer / Company</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" id="reg-name" placeholder="Ramesh Kumar"/>
+          </div>
+          <div class="form-group">
+            <label>Phone Number *</label>
+            <input type="tel" id="reg-phone" placeholder="9876543210" maxlength="10"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Email Address *</label>
+          <input type="email" id="reg-email" placeholder="your@email.com"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Password *</label>
+            <input type="password" id="reg-password" placeholder="Min 6 characters"/>
+          </div>
+          <div class="form-group">
+            <label>Confirm Password *</label>
+            <input type="password" id="reg-confirm" placeholder="Re-enter password"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Area / Locality</label>
+            <input type="text" id="reg-area" placeholder="Saheed Nagar"/>
+          </div>
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" id="reg-city" placeholder="Bhubaneswar" value="Bhubaneswar"/>
+          </div>
+        </div>
+        <div id="worker-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Experience Level</label>
+              <select id="reg-experience">
+                <option value="fresher">Fresher (No experience)</option>
+                <option value="less_than_1">Less than 1 year</option>
+                <option value="1_to_3">1–3 years</option>
+                <option value="3_to_5">3–5 years</option>
+                <option value="5_plus">5+ years</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Current / Last Job Title</label>
+              <input type="text" id="reg-jobtitle" placeholder="e.g. Construction Helper"/>
+            </div>
+          </div>
+        </div>
+        <div id="employer-fields" style="display:none;">
+          <div class="form-group">
+            <label>Company / Business Name</label>
+            <input type="text" id="reg-company" placeholder="e.g. Patel Builders Pvt Ltd"/>
+          </div>
+        </div>
+        <button class="btn-auth" onclick="handleRegister()" id="btn-register">Create Account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== MAIN APP =================== -->
+<div id="app-screen">
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏗️</div>
+    <div class="logo-text">Find My <span>Job</span></div>
+  </div>
+  <nav>
+    <button class="active" onclick="showTab('find')" id="tab-find">🔍 <span>Find Jobs</span></button>
+    <button onclick="showTab('post')" id="tab-post">📋 <span>Post Job</span></button>
+    <button onclick="showTab('profile')" id="tab-profile">👤 <span>Profile</span></button>
+  </nav>
+  <div class="header-right">
+    <div class="user-badge" onclick="showTab('profile')">
+      <div class="user-avatar" id="header-avatar">👷</div>
+      <span id="header-name">User</span>
+    </div>
+    <button class="btn-logout" onclick="handleLogout()">Logout</button>
+  </div>
+</header>
+
+<main>
+  <div class="tab-panels">
+
+    <!-- FIND JOBS -->
+    <div id="panel-find" class="active">
+      <div class="hero">
+        <div class="hero-badge">📍 Near You in Bhubaneswar</div>
+        <h1>Find <span>Daily Work</span><br/>Near You – Fast</h1>
+        <p>No resume needed. Just your skill and willingness. Employers are waiting.</p>
+        <div class="hero-actions">
+          <button class="btn-primary" onclick="showTab('post')">📋 Post a Job</button>
+          <button class="btn-outline" onclick="document.getElementById('search-input').focus()">🔍 Search Jobs</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-num" id="s-jobs">248</div><div class="stat-lbl">Active Jobs</div></div>
+        <div class="stat"><div class="stat-num" id="s-hired">1,420</div><div class="stat-lbl">Workers Hired</div></div>
+        <div class="stat"><div class="stat-num" id="s-emp">312</div><div class="stat-lbl">Employers</div></div>
+        <div class="stat"><div class="stat-num">⚡ 2hrs</div><div class="stat-lbl">Avg. Hire Time</div></div>
+      </div>
+
+      <div class="search-bar">
+        <span>🔍</span>
+        <input class="search-input" id="search-input" placeholder="Search – construction, IT, healthcare, delivery…" oninput="filterJobs()"/>
+        <div class="search-loc">📍 <span>Bhubaneswar</span></div>
+        <button class="btn-search" onclick="filterJobs()">Search</button>
+      </div>
+
+      <div class="filter-row">
+        <span class="filter-label">Category:</span>
+        <div class="chip active" onclick="setFilter(this,'all')">All</div>
+        <div class="chip" onclick="setFilter(this,'construction')">🏗️ Construction</div>
+        <div class="chip" onclick="setFilter(this,'it_tech')">💻 IT / Tech</div>
+        <div class="chip" onclick="setFilter(this,'healthcare')">🏥 Healthcare</div>
+        <div class="chip" onclick="setFilter(this,'finance')">📊 Finance</div>
+        <div class="chip" onclick="setFilter(this,'education')">📚 Education</div>
+        <div class="chip" onclick="setFilter(this,'cleaning')">🧹 Cleaning</div>
+        <div class="chip" onclick="setFilter(this,'delivery')">🚚 Delivery</div>
+        <div class="chip" onclick="setFilter(this,'security')">🔒 Security</div>
+        <div class="chip" onclick="setFilter(this,'hospitality')">🏨 Hospitality</div>
+        <div class="chip" onclick="setFilter(this,'marketing')">📱 Marketing</div>
+        <div class="chip" onclick="setFilter(this,'design')">🎨 Design</div>
+        <div class="chip" onclick="setFilter(this,'logistics')">📦 Logistics</div>
+        <div class="chip" onclick="setFilter(this,'agriculture')">🌾 Agriculture</div>
+        <div class="chip" onclick="setFilter(this,'domestic')">🏠 Domestic</div>
+      </div>
+
+      <div class="section-title">
+        <span>📌 Jobs Near You <span id="jobs-count" style="font-size:0.8rem;color:var(--muted);font-family:'Noto Sans',sans-serif;"></span></span>
+        <a onclick="sortJobs()">Sort by: <span id="sort-label">Latest</span> ▾</a>
+      </div>
+
+      <div class="jobs-grid" id="jobs-grid">
+        <div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--muted);">
+          <div class="spinner" style="width:32px;height:32px;margin:0 auto 16px;border-width:3px;"></div>
+          <div>Loading jobs…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST JOB -->
+    <div id="panel-post">
+      <div class="post-job-form">
+        <h2>📋 Post a Job Opening</h2>
+        <div id="post-error" class="auth-error"></div>
+        <div id="post-success" class="auth-success"></div>
+
+        <div class="form-group">
+          <label>Job Title *</label>
+          <input type="text" id="post-title" placeholder="e.g. Software Developer, Construction Helper, Nurse"/>
+        </div>
+
+        <div class="form-group">
+          <label>Category *</label>
+          <div class="category-grid" id="category-grid">
+            <div class="cat-option selected" data-cat="construction" onclick="selectCategory(this)"><div class="cat-icon">🏗️</div><div class="cat-label">Construction</div></div>
+            <div class="cat-option" data-cat="it_tech" onclick="selectCategory(this)"><div class="cat-icon">💻</div><div class="cat-label">IT / Tech</div></div>
+            <div class="cat-option" data-cat="healthcare" onclick="selectCategory(this)"><div class="cat-icon">🏥</div><div class="cat-label">Healthcare</div></div>
+            <div class="cat-option" data-cat="finance" onclick="selectCategory(this)"><div class="cat-icon">📊</div><div class="cat-label">Finance</div></div>
+            <div class="cat-option" data-cat="education" onclick="selectCategory(this)"><div class="cat-icon">📚</div><div class="cat-label">Education</div></div>
+            <div class="cat-option" data-cat="marketing" onclick="selectCategory(this)"><div class="cat-icon">📱</div><div class="cat-label">Marketing</div></div>
+            <div class="cat-option" data-cat="design" onclick="selectCategory(this)"><div class="cat-icon">🎨</div><div class="cat-label">Design</div></div>
+            <div class="cat-option" data-cat="logistics" onclick="selectCategory(this)"><div class="cat-icon">📦</div><div class="cat-label">Logistics</div></div>
+            <div class="cat-option" data-cat="hospitality" onclick="selectCategory(this)"><div class="cat-icon">🏨</div><div class="cat-label">Hospitality</div></div>
+            <div class="cat-option" data-cat="security" onclick="selectCategory(this)"><div class="cat-icon">🔒</div><div class="cat-label">Security</div></div>
+            <div class="cat-option" data-cat="cleaning" onclick="selectCategory(this)"><div class="cat-icon">🧹</div><div class="cat-label">Cleaning</div></div>
+            <div class="cat-option" data-cat="delivery" onclick="selectCategory(this)"><div class="cat-icon">🚚</div><div class="cat-label">Delivery</div></div>
+            <div class="cat-option" data-cat="agriculture" onclick="selectCategory(this)"><div class="cat-icon">🌾</div><div class="cat-label">Agriculture</div></div>
+            <div class="cat-option" data-cat="domestic" onclick="selectCategory(this)"><div class="cat-icon">🏠</div><div class="cat-label">Domestic</div></div>
+            <div class="cat-option" data-cat="manufacturing" onclick="selectCategory(this)"><div class="cat-icon">🏭</div><div class="cat-label">Manufacturing</div></div>
+            <div class="cat-option" data-cat="other" onclick="selectCategory(this)"><div class="cat-icon">💼</div><div class="cat-label">Other</div></div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Pay Per Day (₹) *</label>
+            <input type="number" id="post-pay" placeholder="500"/>
+          </div>
+          <div class="form-group">
+            <label>Workers Needed *</label>
+            <input type="number" id="post-workers" placeholder="1" min="1" value="1"/>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Location / Area *</label>
+            <input type="text" id="post-area" placeholder="Saheed Nagar, Bhubaneswar"/>
+          </div>
+          <div class="form-group">
+            <label>Duration</label>
+            <input type="text" id="post-duration" placeholder="1 week, Permanent, 3 months"/>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Contact Phone *</label>
+            <input type="tel" id="post-phone" placeholder="9876543210"/>
+          </div>
+          <div class="form-group">
+            <label>Experience Required</label>
+            <select id="post-exp">
+              <option value="none">No experience needed</option>
+              <option value="fresher">Fresher welcome</option>
+              <option value="less_than_1">Less than 1 year</option>
+              <option value="1_to_3">1–3 years</option>
+              <option value="3_to_5">3–5 years</option>
+              <option value="5_plus">5+ years</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Skills Required (comma separated)</label>
+          <input type="text" id="post-skills" placeholder="e.g. Heavy Lifting, Basic Tools, English"/>
+        </div>
+
+        <div class="form-group">
+          <label>Job Description *</label>
+          <textarea id="post-desc" rows="4" placeholder="Describe the job responsibilities, timings, any specific requirements…" style="resize:vertical;"></textarea>
+        </div>
+
+        <div class="form-check" style="margin-bottom:16px;">
+          <input type="checkbox" id="post-urgent"/>
+          <label for="post-urgent">🔴 Mark as Urgent – show at top of listings</label>
+        </div>
+
+        <button class="btn-primary" style="width:100%;padding:14px;" onclick="handlePostJob()">
+          📋 Post Job Now
+        </button>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div id="panel-profile">
+      <div class="profile-panel" id="profile-panel-content">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- JOB DETAILS MODAL -->
+<div class="modal-overlay" id="modal" style="display:none;" onclick="closeModal(event)">
+  <div class="modal" id="modal-inner">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- APPLICATION FORM MODAL -->
+<div class="modal-overlay" id="apply-modal" style="display:none;" onclick="closeApplyModal(event)">
+  <div class="apply-modal" id="apply-modal-inner">
+    <button class="modal-close" onclick="closeApplyModal()">✕</button>
+    <div id="apply-modal-content"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast" style="display:none;"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
