@@ -1,14 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const Job = require('../models/Job');
+const CachedJob = require('../models/CachedJob');
+const { fetchAdzunaJobs } = require('../utils/adzuna');
 const { protect, optionalAuth } = require('../middleware/auth');
 
 // GET /api/jobs - Get all jobs with filters
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const { category, search, city, sort, page = 1, limit = 20, urgent } = req.query;
+    
+    // 1. Build query for standard DB jobs
     const query = { isActive: true };
-
     if (category && category !== 'all') query.category = category;
     if (city) query['location.city'] = new RegExp(city, 'i');
     if (urgent === 'true') query.isUrgent = true;
@@ -25,16 +28,103 @@ router.get('/', optionalAuth, async (req, res) => {
     if (sort === 'pay') sortObj = { payPerDay: -1 };
     else if (sort === 'urgent') sortObj = { isUrgent: -1, postedAt: -1 };
 
-    const jobs = await Job.find(query)
+    // Fetch local jobs from DB
+    const localJobs = await Job.find(query)
       .sort(sortObj)
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
       .populate('employer', 'name companyName');
 
-    const total = await Job.countDocuments(query);
+    // 2. Fetch or serve cached real-time jobs from Adzuna
+    let liveJobs = [];
+    const isAdzunaConfigured = process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY;
 
-    res.json({ success: true, jobs, total, page: parseInt(page), pages: Math.ceil(total / limit) });
+    if (isAdzunaConfigured) {
+      const searchTerm = search || (category && category !== 'all' ? category : 'helper');
+      const searchCity = city || 'Bhubaneswar';
+
+      // Build cache search query
+      const cacheQuery = {};
+      if (category && category !== 'all') cacheQuery.category = category;
+      if (urgent === 'true') cacheQuery.isUrgent = true;
+      if (searchTerm && searchTerm !== 'helper') {
+        cacheQuery.$or = [
+          { title: new RegExp(searchTerm, 'i') },
+          { description: new RegExp(searchTerm, 'i') }
+        ];
+      }
+
+      let cachedResults = await CachedJob.find(cacheQuery);
+
+      if (cachedResults.length === 0) {
+        // Cache miss: Fetch from live Adzuna API
+        console.log(`🔍 Cache miss for term "${searchTerm}" in "${searchCity}". Fetching from Adzuna...`);
+        const freshJobs = await fetchAdzunaJobs({ query: searchTerm, location: searchCity });
+        
+        if (freshJobs.length > 0) {
+          // Store fresh results in MongoDB Cache
+          try {
+            await CachedJob.insertMany(freshJobs, { ordered: false });
+          } catch (insertErr) {
+            // Ignore duplicate key errors
+          }
+          cachedResults = await CachedJob.find(cacheQuery);
+        }
+      } else {
+        console.log(`⚡ Cache hit! Serving ${cachedResults.length} cached Adzuna jobs for "${searchTerm}"`);
+      }
+
+      liveJobs = cachedResults;
+    }
+
+    // 3. Combine both streams
+    // Map CachedJob to resemble populated employer fields
+    const mappedLiveJobs = liveJobs.map(j => ({
+      ...j._doc,
+      employer: {
+        _id: 'cached_partner',
+        name: j.employerName,
+        companyName: j.employerName
+      }
+    }));
+
+    let allJobs = [...localJobs, ...mappedLiveJobs];
+
+    // Deduplicate jobs
+    const seen = new Set();
+    allJobs = allJobs.filter(j => {
+      const idStr = j._id.toString();
+      if (seen.has(idStr)) return false;
+      seen.add(idStr);
+      return true;
+    });
+
+    // Apply sorting to combined results
+    if (sort === 'pay') {
+      allJobs.sort((a, b) => b.payPerDay - a.payPerDay);
+    } else if (sort === 'urgent') {
+      allJobs.sort((a, b) => {
+        if (a.isUrgent && !b.isUrgent) return -1;
+        if (!a.isUrgent && b.isUrgent) return 1;
+        return new Date(b.postedAt) - new Date(a.postedAt);
+      });
+    } else {
+      // Default: latest
+      allJobs.sort((a, b) => new Date(b.postedAt) - new Date(a.postedAt));
+    }
+
+    // Apply combined pagination
+    const total = allJobs.length;
+    const startIndex = (page - 1) * limit;
+    const paginatedJobs = allJobs.slice(startIndex, startIndex + parseInt(limit));
+
+    res.json({
+      success: true,
+      jobs: paginatedJobs,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limit)
+    });
   } catch (err) {
+    console.error('Error listing jobs:', err);
     res.status(500).json({ success: false, message: 'Error fetching jobs.' });
   }
 });
@@ -42,12 +132,41 @@ router.get('/', optionalAuth, async (req, res) => {
 // GET /api/jobs/:id
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
-    const job = await Job.findById(req.params.id).populate('employer', 'name companyName phone');
+    let job = null;
+    
+    // Validate if parameter is standard 24-character ObjectId before querying Job
+    const isMongoId = /^[0-9a-fA-F]{24}$/.test(req.params.id);
+    if (isMongoId) {
+      job = await Job.findById(req.params.id).populate('employer', 'name companyName phone');
+    }
+    
+    if (!job) {
+      // Look in the CachedJob database
+      job = await CachedJob.findById(req.params.id);
+    }
+    
     if (!job) return res.status(404).json({ success: false, message: 'Job not found.' });
+
+    // For cached partner jobs
+    if (job.adzunaId) {
+      return res.json({
+        success: true,
+        job: {
+          ...job._doc,
+          employer: {
+            name: job.employerName,
+            companyName: job.employerName,
+            phone: job.contactPhone
+          }
+        }
+      });
+    }
+
     job.views += 1;
     await job.save({ validateBeforeSave: false });
     res.json({ success: true, job });
   } catch (err) {
+    console.error('Error fetching job details:', err);
     res.status(500).json({ success: false, message: 'Error fetching job.' });
   }
 });
